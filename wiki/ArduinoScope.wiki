@@ -1,0 +1,3 @@
+= ArduinoScope =
+
+ArduinoScope est un petit oscilloscope qui affiche en temps réel l'état des entrées analogiques et numériques d'un Arduino sous forme d'un graphe.
