@@ -2,5 +2,6 @@
 
 ==Organisation des dossiers du dépôt==
 Pour l'instant :
-* GUI (pour toutes les interfaces utilisateurs)
- * ArduinoScope (un scope avec python)
+ * GUI (pour toutes les interfaces utilisateurs)
+  * ArduinoScope (un scope avec python)
+ * Wiki (espace pour les documents relatifs au wiki : images, ...)
