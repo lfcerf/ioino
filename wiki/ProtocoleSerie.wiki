@@ -23,3 +23,6 @@ Envoie de l'état d'un port de l'Arduino (analogique ou numérique) par paquets.
            2 octets              + 2 octets(port A) ou 1 octet (port N)
  * taille des paquets : à définir ...
  * caractère de fin de paquet : LR
+
+== Codes Arduino ==
+ * Version beta de code Arduino de transfert de paquets.
