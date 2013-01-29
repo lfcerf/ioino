@@ -25,4 +25,4 @@ Envoie de l'état d'un port de l'Arduino (analogique ou numérique) par paquets.
  * caractère de fin de paquet : LR
 
 == Codes Arduino ==
- * Version beta de code Arduino de transfert de paquets.
+ * [http://ioino.googlecode.com/svn/trunk/Arduino/SerialData/SerialData.ino Version beta de code Arduino de transfert de paquets].
