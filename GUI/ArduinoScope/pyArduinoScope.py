@@ -37,7 +37,7 @@ Code très largement inspiré de http://www.blendedtechnologies.com/realtime-plo
 """
 __appname__= "pyArduinoScope"
 __author__ = u"Cédrick FAURY"
-__version__ = "0.2d"
+__version__ = "0.3"
 
 
 import os
@@ -83,6 +83,8 @@ class GraphFrame(wx.Frame):
 #        AjoutVariablesEnv()
 
         self.paused = False
+        self.fichier = None
+        self.nomfichier = ""
         
         self.create_menu()
         self.create_status_bar()
@@ -105,6 +107,8 @@ class GraphFrame(wx.Frame):
         self.AppliquerOptions() 
         self.initTimer()
         
+        
+        
         # Interception de la demande de fermeture
         self.Bind(wx.EVT_CLOSE, self.on_exit)
         
@@ -113,13 +117,13 @@ class GraphFrame(wx.Frame):
     def initSerial(self):
         """ Initialisation de la communication série
         """
-        print "initSerial", globdef.PORT, globdef.BAUDRATE
+        print "initSerial", globdef.COM_PORT, globdef.BAUDRATE
         
         if hasattr(self, 'datagen'):
             self.datagen.Terminer()
             
         if globdef.SOURCE == "Arduino":
-            self.datagen = DataGen(baudrate = globdef.BAUDRATE, port = globdef.PORT)
+            self.datagen = DataGen(baudrate = globdef.BAUDRATE, port = globdef.COM_PORT)
         else:
             self.datagen = AudioData()
         
@@ -138,12 +142,35 @@ class GraphFrame(wx.Frame):
         
         
     def initData(self):
-        if globdef.SIMPLE_PORT or globdef.SOURCE != "Arduino":
-            self.data = [(0., 0.)]
-        else:
+        if globdef.TYPE_DATA == "ES" :
+            if globdef.SIMPLE_PORT or globdef.SOURCE != "Arduino":
+                self.data = [(0., 0.)]
+            else:
+                self.data = [(0., np.zeros(16))]
+        elif globdef.TYPE_DATA == "CSV" :
             self.data = [(0., np.zeros(16))]
-            
-            
+        self.csv = []
+        
+        if hasattr(self, "cb_e") and self.cb_e.GetValue():
+            if self.nomfichier == "":
+                dlg = wx.FileDialog(
+                self, message=u"Selectionner un fichier",
+                defaultDir=os.getcwd(), 
+                defaultFile="",
+                style=wx.OPEN | wx.MULTIPLE | wx.CHANGE_DIR
+                )
+    
+                if dlg.ShowModal() == wx.ID_OK:
+                    # This returns a Python list of files that were selected.
+                    self.nomfichier = dlg.GetPaths()[0]
+                    self.ds.SetPath(self.nomfichier)
+            try:
+                self.fichier = open(self.nomfichier, 'w')
+            except:
+                self.fichier = None
+        else:
+            self.fichier = None
+        
     def initTimer(self):
         """ Initialisation et démarrage du timer
         """
@@ -256,6 +283,17 @@ class GraphFrame(wx.Frame):
         self.Bind(wx.EVT_CHECKBOX, self.on_cb_grid, self.cb_grid)
         self.cb_grid.SetValue(True)
         
+        #
+        # Enregistrement
+        #
+        sbe = wx.StaticBox(self.panel, -1, u"Enregistrement")
+        sbse = wx.StaticBoxSizer(sbe, wx.VERTICAL)
+        self.cb_e = wx.CheckBox(self.panel, -1,
+            u"Enregistrer les données")
+        self.Bind(wx.EVT_CHECKBOX, self.on_check_enregistrer, self.cb_e)
+        self.ds = URLSelectorCombo(self.panel)
+        sbse.Add(self.cb_e, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbse.Add(self.ds, flag = wx.EXPAND|wx.ALL, border = 2)
         
         #
         # Selection de ports
@@ -274,6 +312,7 @@ class GraphFrame(wx.Frame):
         self.vbox_droite.Add(self.hbox_select, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         self.vbox_droite.Add(self.pause_button, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         self.vbox_droite.Add(self.cb_grid, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        self.vbox_droite.Add(sbse, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         
         self.hbox_bas = wx.BoxSizer(wx.HORIZONTAL)
         self.hbox_bas.Add(sbsX, border=5, flag=wx.ALL|wx.EXPAND)
@@ -372,17 +411,22 @@ class GraphFrame(wx.Frame):
         # Y
         #
         yyy = []
-        if not globdef.SIMPLE_PORT:
-            lstC = self.selectA.GetValues() + self.selectN.GetValues()
-            for i, s in enumerate(lstC):
-                if s:
-                    yyy.append(y[i])
-            M_y, m_y = [max(Y) for Y in yyy], [min(Y) for Y in yyy]
+        if globdef.TYPE_DATA == "ES":
+            if not globdef.SIMPLE_PORT:
+                lstC = self.selectA.GetValues() + self.selectN.GetValues()
+                for i, s in enumerate(lstC):
+                    if s:
+                        yyy.append(y[i])
+                M_y, m_y = [max(Y) for Y in yyy], [min(Y) for Y in yyy]
+            
+            else:
+                yyy = [y]
+                M_y, m_y = [max(Y) for Y in yyy], [min(Y) for Y in yyy]
         
-        else:
-            yyy = [y]
+        elif globdef.TYPE_DATA == "CSV":
+            yyy = y
             M_y, m_y = [max(Y) for Y in yyy], [min(Y) for Y in yyy]
-        
+            
         if yyy == []:
             return
         
@@ -412,7 +456,7 @@ class GraphFrame(wx.Frame):
         x, y = self.dezipperData()
 #        print len(self.data)
 #        print "x", x[-100:]
-#        print "y", y[:2][-10:]
+#        print "y", y[0][-100:]
         
         self.AjusterVue(x, y)
 
@@ -431,20 +475,27 @@ class GraphFrame(wx.Frame):
         if globdef.SOURCE != "Arduino":
             self.plot_data[0].set_xdata(np.array(x))
             self.plot_data[0].set_ydata(np.array(y[0]))
-        elif globdef.SIMPLE_PORT: 
-            if globdef.TYPE_PORT == "A":
-                i = globdef.ARDUINO_PORT
+        
+        elif globdef.TYPE_DATA == "ES":
+            if globdef.SIMPLE_PORT: 
+                if globdef.TYPE_PORT == "A":
+                    i = globdef.ARDUINO_PORT
+                else:
+                    i = globdef.ARDUINO_PORT + 6
+                self.plot_data[i].set_xdata(np.array(x))
+                self.plot_data[i].set_ydata(np.array(y))
             else:
-                i = globdef.ARDUINO_PORT + 6
-            self.plot_data[i].set_xdata(np.array(x))
-            self.plot_data[i].set_ydata(np.array(y))
-        else:
-            lstC = self.selectA.GetValues() + self.selectN.GetValues()
-            for i, s in enumerate(lstC):
-                if s:
-                    self.plot_data[i].set_xdata(np.array(x))
-                    self.plot_data[i].set_ydata(np.array(y[i]))
-
+                lstC = self.selectA.GetValues() + self.selectN.GetValues()
+                for i, s in enumerate(lstC):
+                    if s:
+                        self.plot_data[i].set_xdata(np.array(x))
+                        self.plot_data[i].set_ydata(np.array(y[i]))
+        
+        elif globdef.TYPE_DATA == "CSV":
+            for i, s in enumerate(y):
+                self.plot_data[i].set_xdata(np.array(x))
+                self.plot_data[i].set_ydata(np.array(y[i]))
+            
         self.canvas.draw()
     
     def OnScroll(self, event):
@@ -479,6 +530,8 @@ class GraphFrame(wx.Frame):
             self.datagen_thread.stop()
             self.redraw_timer.Stop()
             self.draw_plot()
+            if self.fichier != None:
+                self.fichier.close()
         else:
             self.initData()
             self.initTimer()
@@ -492,6 +545,9 @@ class GraphFrame(wx.Frame):
     
     def on_cb_grid(self, event):
         self.draw_plot()
+    
+    def on_check_enregistrer(self, event):
+        return
     
     def on_cb_xlab(self, event):
         self.draw_plot()
@@ -564,9 +620,14 @@ class GraphFrame(wx.Frame):
     def on_redraw_timer(self, event):
 #        print "on_redraw_timer"
         self.draw_plot()
+        self.sauverCSV()
         self.AfficherRate()
     
-    
+    def sauverCSV(self):
+        if self.cb_e.GetValue() and self.fichier != None:
+            if globdef.TYPE_DATA == "CSV":
+                self.fichier.write("\n".join(self.csv)+"\n")
+                self.csv = []
     
     def on_exit(self, event):
         print 'on_exit'
@@ -611,12 +672,13 @@ class GraphFrame(wx.Frame):
         # Options Communication
         #
         globdef.BAUDRATE = self.options.optGenerales["Baudrate"]
-        globdef.PORT = self.options.optGenerales["Port"]
+        globdef.COM_PORT = self.options.optGenerales["Port"]
         globdef.DATAGEN_INTERVAL_MS = self.options.optGenerales["AcquisInterval"]
         globdef.ARDUINO_PATH = self.options.optGenerales["RepArduino"]
         globdef.ARDUINO_PORT = self.options.optGenerales["ArduinoPort"]
         globdef.SIMPLE_PORT = self.options.optGenerales["SimplePort"]
         globdef.TYPE_PORT = self.options.optGenerales["TypePort"]
+        globdef.TYPE_DATA = self.options.optGenerales["TypeData"]
         
         
         #
@@ -776,7 +838,7 @@ def AjoutVariablesEnv():
     os.putenv('ARDUINO_MCU', globdef.ARDUINO_NAME)
     os.putenv('ARDUINO_PROGRAMMER', globdef.ARDUINO_PROG)
     os.putenv('ARDUINO_FCPU', globdef.ARDUINO_FCPU)
-    os.putenv('ARDUINO_COMPORT', globdef.PORT)
+    os.putenv('ARDUINO_COMPORT', globdef.COM_PORT)
     os.putenv('ARDUINO_BURNRATE', str(globdef.BAUDRATE))
 
 
@@ -804,6 +866,78 @@ def BuildAndUpload():
         scriptfile.close()
     
 #    scriptfile = tempfile.TemporaryFile([mode='w+b'[, bufsize=-1[, suffix=''[, prefix='tmp'[, dir=None]]]]])
+    
+    
+    
+    
+##########################################################################################################
+#
+#  DirSelectorCombo
+#
+##########################################################################################################
+class URLSelectorCombo(wx.Panel):
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent, -1)
+        self.SetMaxSize((-1,22))
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        self.texte = wx.TextCtrl(self, -1, "", size = (-1, 16))
+    
+        bt2 =wx.BitmapButton(self, 101, wx.ArtProvider_GetBitmap(wx.ART_NORMAL_FILE, wx.ART_OTHER, (16, 16)))
+        bt2.SetToolTipString(u"Sélectionner un fichier")
+        self.Bind(wx.EVT_BUTTON, self.OnClick, bt2)
+        self.Bind(wx.EVT_TEXT, self.EvtText, self.texte)
+        
+        sizer.Add(bt2)
+        sizer.Add(self.texte,1,flag = wx.EXPAND)
+        self.SetSizerAndFit(sizer)
+        self.fichier = ""
+
+    # Overridden from ComboCtrl, called when the combo button is clicked
+    def OnClick(self, event):
+        
+        if event.GetId() == 100:
+            dlg = wx.DirDialog(self, u"Sélectionner un dossier",
+                          style=wx.DD_DEFAULT_STYLE,
+                          defaultPath = self.pathseq
+                           #| wx.DD_DIR_MUST_EXIST
+                           #| wx.DD_CHANGE_DIR
+                           )
+            if dlg.ShowModal() == wx.ID_OK:
+                self.SetPath(dlg.GetPath())
+    
+            dlg.Destroy()
+        else:
+            dlg = wx.FileDialog(self, u"Sélectionner un fichier",
+                                wildcard = self.ext,
+    #                           defaultPath = globdef.DOSSIER_EXEMPLES,
+                               style = wx.DD_DEFAULT_STYLE
+                               #| wx.DD_DIR_MUST_EXIST
+                               #| wx.DD_CHANGE_DIR
+                               )
+    
+            if dlg.ShowModal() == wx.ID_OK:
+                self.SetPath(dlg.GetPath())
+    
+            dlg.Destroy()
+        
+        self.SetFocus()
+
+
+    ##########################################################################################
+    def EvtText(self, event):
+        self.fichier = event.GetString()
+
+
+    ##########################################################################################
+    def GetPath(self):
+        return self.fichier
+    
+    ##########################################################################################
+    def SetPath(self, nom):
+        self.fichier = nom
+        self.texte.SetValue(nom)
+  
     
 def lancerArduino(app):
     

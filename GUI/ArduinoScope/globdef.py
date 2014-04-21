@@ -50,8 +50,7 @@ BaudRate = ['2400', '4800', '9600', '19200', '38400', '57600', '115200']
 
 DATAGEN_INTERVAL_MS = 5  # Période d'acquisition des données
 BAUDRATE = 115200
-PORT = ''
-
+COM_PORT = ''
 
 import comscan
 def GetArduinoCOMPort():
@@ -66,15 +65,20 @@ def GetArduinoCOMPort():
                 return r['name'], r['description']
     return lst
         
-p = GetArduinoCOMPort()
-if type(p) == tuple:
-    PORT = p[0]
-    Ports = [p]
-    print u"Arduino trouvé sur", PORT
-else:
-    Ports = p
-    print u"Arduino non trouvé", Ports
-
+COM_PORTS_ARDUINO = GetArduinoCOMPort()
+if len(COM_PORTS_ARDUINO) > 0:
+    COM_PORT = COM_PORTS_ARDUINO[0][0]
+    print u"Arduino trouvé sur", COM_PORT
+    
+#if type(p) == list:
+#    PORT = p[0]
+#    Ports = [p]
+#    print u"Arduino trouvé sur", PORT
+#else:
+#    Ports = p
+#    print u"Arduino non trouvé", Ports
+#
+#print PORT
 
 ## A function that tries to list serial ports on most common platforms
 #""" http://stackoverflow.com/questions/11303850/what-is-the-cross-platform-method-of-enumerating-serial-ports-in-python-includi
@@ -163,6 +167,7 @@ ARDUINO_PROG = 'stk500'
 ARDUINO_FCPU = '16000000'
 ARDUINO_PORT = 5
 TYPE_PORT = "A" # "A" ou "N"
+TYPE_DATA = "CSV" # "CSV"
 SIMPLE_PORT = False
 ECHELLE = 5.0/1024
 
