@@ -14,7 +14,8 @@ import serial
 import globdef
 
 
-from numpy import short, fromstring, arange, uint16, bool, concatenate, zeros
+from numpy import short, fromstring, arange, uint16, bool, concatenate, zeros, asarray
+#from numpy.ndarray import tolist
 
 
 RANDOM = True # pour essais
@@ -93,9 +94,9 @@ class SerialData(object):
                 global VAL
                 r = [(random.random()-0.5)*20 for i in range(16)]
                 VAL = [v+r for v, r in zip(VAL,r)]
-                return VAL
+                return time.clock(), VAL
             else:  
-                return None #return anything so we can test when Arduino isn't connected
+                return None, None #return anything so we can test when Arduino isn't connected
         
         #return a float value or try a few times until we get one
         for i in range(40):
@@ -117,14 +118,15 @@ class SerialData(object):
             if RANDOM:
                 global VALS
                 VALS += (random.random()-0.5)*20
-                return VALS
+                return time.clock(), VALS
             else:  
-                return None #return anything so we can test when Arduino isn't connected
+                return None, None #return anything so we can test when Arduino isn't connected
         
         #return a float value or try a few times until we get one
         for i in range(40):
             if last_received == None:
                 return None
+        
         
             if num:
                 if len(last_received) == 2:
@@ -145,6 +147,37 @@ class SerialData(object):
 #                time.sleep(.005)
         return (last_time, 0.)
     
+    
+    
+    def next_csv(self):
+        global last_received
+        if not self.ser:
+            if RANDOM:
+                global VALS
+                VALS += (random.random()-0.5)*20
+                return time.clock(), VALS
+            else:  
+                return None, None #return anything so we can test when Arduino isn't connected
+        
+        #return a float value or try a few times until we get one
+        for i in range(40):
+            if last_received == None:
+                return None
+        
+            line = last_received
+            vals = line.replace('\r', '').split('\t')
+            if len(vals)>1:
+
+                try:
+                    temps = eval(vals[0])/1000.
+                    val = asarray([eval(v) for v in vals[1:]])
+                except:
+                    temps = last_time
+                    val = 0.
+   
+                return (temps, val )
+            
+        return (last_time, 0.)
     
     
     def __del__(self):
@@ -200,11 +233,14 @@ class DataGen_Thread(threading.Thread):
         #
         # Récupération des données
         #
-        if globdef.SIMPLE_PORT:
-            temps, data = self.datagen.next_simple()
-        else:
-            temps, data = self.datagen.next_multi()
-        
+        if globdef.TYPE_DATA == "ES":
+            if globdef.SIMPLE_PORT:
+                temps, data = self.datagen.next_simple()
+            else:
+                temps, data = self.datagen.next_multi()
+        elif globdef.TYPE_DATA == "CSV":
+            temps, data = self.datagen.next_csv()
+            
 
         
         #
@@ -213,14 +249,21 @@ class DataGen_Thread(threading.Thread):
         if temps > 0 and self.temps != temps:
             self.temps = temps
             self.t = temps - self.t0
-#            print (self.t*1000, data)
+            
             self.parent.data.append((self.t*1000, data))
             self.parent.temps.append(self.t*1000)
+            try:
+                self.parent.csv.append(str(self.t)+"\t"+"\t".join([str(v) for v in data.tolist()]))
+            except:
+                pass
+#            self.parent.data.append((self.t, data))
+#            self.parent.temps.append(self.t)
             
             #
             # Suppression des données plus anciennes que l'historique
             #
             self.parent.data = self.parent.data[-globdef.NBR_POINTS:]
+            
             
 
 if __name__=='__main__':

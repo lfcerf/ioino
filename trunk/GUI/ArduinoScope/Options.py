@@ -153,12 +153,13 @@ class Options:
     def defaut(self):
         print "defaut"
         self.optGenerales["Baudrate"] = globdef.BAUDRATE
-        self.optGenerales["Port"] = globdef.PORT
+        self.optGenerales["Port"] = globdef.COM_PORT
         self.optGenerales["AcquisInterval"] = globdef.DATAGEN_INTERVAL_MS
         self.optGenerales["RepArduino"] = globdef.ARDUINO_PATH
         self.optGenerales["ArduinoPort"] = globdef.ARDUINO_PORT
         self.optGenerales["SimplePort"] = globdef.SIMPLE_PORT
         self.optGenerales["TypePort"] = globdef.TYPE_PORT
+        self.optGenerales["TypeData"] = globdef.TYPE_DATA
         
         
         self.optAffichage["RefreshInterval"] = globdef.REFRESH_INTERVAL_MS
@@ -285,8 +286,8 @@ class pnlGenerales(wx.Panel):
         sb0 = wx.StaticBox(self, -1, u"Connexion", size = (200,-1))
         sbs0 = wx.StaticBoxSizer(sb0,wx.VERTICAL)
         
-        listPorts = [n+' '+d for n,d in globdef.Ports]
-        cb = wx.ComboBox(self, -1, globdef.PORT, size = (40, -1), 
+        listPorts = [n+' '+d for n,d in globdef.COM_PORTS_ARDUINO]
+        cb = wx.ComboBox(self, -1, globdef.COM_PORT, size = (40, -1), 
                          choices = listPorts,
                          style = wx.CB_DROPDOWN|wx.CB_READONLY)
         cb.SetToolTip(wx.ToolTip(u"Choisir le port de communication"))
@@ -328,16 +329,28 @@ class pnlGenerales(wx.Panel):
         sbs1.Add(ss, flag = wx.EXPAND|wx.ALL, border = 5)
         fs.Bind(wx.EVT_TEXT, self.EvtComboCtrl)
         
-        sb2 = wx.StaticBox(self, -1, u"Port E/S", size = (-1,-1))
-        sbs2 = wx.StaticBoxSizer(sb2,wx.VERTICAL)
+        sb2 = wx.StaticBox(self, -1, u"Origine des données", size = (-1,-1))
+        sbs2 = wx.StaticBoxSizer(sb2,wx.HORIZONTAL)
+        self.radio_ES = wx.RadioButton(self, -1,
+            label="Port E/S", style=wx.RB_GROUP)
+        self.radio_CSV = wx.RadioButton(self, -1,
+            label="Format CSV")
+        sbs2.Add(self.radio_ES, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbs2.Add(self.radio_CSV, flag = wx.EXPAND|wx.ALL, border = 2)
+        self.Bind(wx.EVT_RADIOBUTTON, self.onRadioES_CSV, self.radio_ES)
+        self.Bind(wx.EVT_RADIOBUTTON, self.onRadioES_CSV, self.radio_CSV)
+        
+        
+        sbes = wx.StaticBox(self, -1, u"Port E/S", size = (-1,-1))
+        sbses = wx.StaticBoxSizer(sbes,wx.VERTICAL)
         self.radio_multi = wx.RadioButton(self, -1,
             label="Multi port", style=wx.RB_GROUP)
         self.radio_simple = wx.RadioButton(self, -1,
             label="Simple port")
         self.radio_simple.SetValue(globdef.SIMPLE_PORT)
         
-        sbs2.Add(self.radio_multi, flag = wx.EXPAND|wx.ALL, border = 2)
-        sbs2.Add(self.radio_simple, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbses.Add(self.radio_multi, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbses.Add(self.radio_simple, flag = wx.EXPAND|wx.ALL, border = 2)
         
         self.radio_ana = wx.RadioButton(self, -1,
             label=u"Analogique", style=wx.RB_GROUP)
@@ -346,8 +359,8 @@ class pnlGenerales(wx.Panel):
         self.radio_ana.Enable(globdef.SIMPLE_PORT)
         self.radio_num.Enable(globdef.SIMPLE_PORT)
         
-        sbs2.Add(self.radio_ana, flag = wx.EXPAND|wx.ALL, border = 2)
-        sbs2.Add(self.radio_num, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbses.Add(self.radio_ana, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbses.Add(self.radio_num, flag = wx.EXPAND|wx.ALL, border = 2)
         
         v = Variable(u'Port E/S', 
                             lstVal = globdef.ARDUINO_PORT, 
@@ -363,7 +376,15 @@ class pnlGenerales(wx.Panel):
         self.Bind(wx.EVT_RADIOBUTTON, self.on_ana_num, self.radio_ana)
         self.Bind(EVT_VAR_CTRL, self.EvtVariableP, vc2)
         self.vc = vc2
-        sbs2.Add(vc2, flag = wx.EXPAND|wx.ALL, border = 5)
+        sbses.Add(vc2, flag = wx.EXPAND|wx.ALL, border = 5)
+        
+        sbs2.Add(sbses, flag = wx.EXPAND|wx.ALL, border = 5)
+        
+        sbcsv = wx.StaticBox(self, -1, u"Format CSV", size = (-1,-1))
+        sbscsv = wx.StaticBoxSizer(sbcsv,wx.VERTICAL)
+        
+        
+        sbs2.Add(sbscsv, flag = wx.EXPAND|wx.ALL, border = 5)
         
         sbs1.Add(sbs2, flag = wx.EXPAND|wx.ALL, border = 5)
         
@@ -375,6 +396,14 @@ class pnlGenerales(wx.Panel):
         self.radio_ana.Enable(self.radio_simple.GetValue())
         self.radio_num.Enable(self.radio_simple.GetValue())
         self.opt["SimplePort"] = self.radio_simple.GetValue()
+        self.Parent.Parent.modif = True
+        
+    
+    def onRadioES_CSV(self, event):
+        if self.radio_ES.GetValue():
+            self.opt["TypeData"] = "ES"
+        else:
+            self.opt["TypeData"] = "CSV"
         self.Parent.Parent.modif = True
         
 #    def on_portAuto(self, event):
