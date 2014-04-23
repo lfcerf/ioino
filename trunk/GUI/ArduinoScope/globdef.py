@@ -58,11 +58,11 @@ def GetArduinoCOMPort():
     lst = []
     for r in res:
         rkeys=r.keys()
+        
         rkeys.sort()
         if r['active']:
-            lst.append((r['name'], r['description']))
-            if r['driverprovider'] == 'http://www.arduino.cc':
-                return r['name'], r['description']
+            if "arduino" in r['driverprovider'] or "Arduino" in r['description']:
+                lst.append((r['name'], r['description']))
     return lst
         
 COM_PORTS_ARDUINO = GetArduinoCOMPort()

@@ -291,6 +291,7 @@ class pnlGenerales(wx.Panel):
                          choices = listPorts,
                          style = wx.CB_DROPDOWN|wx.CB_READONLY)
         cb.SetToolTip(wx.ToolTip(u"Choisir le port de communication"))
+        cb.SetSelection(0)
         sbs0.Add(cb, flag = wx.EXPAND|wx.ALL, border = 5)
         self.Bind(wx.EVT_COMBOBOX, self.EvtComboBoxP, cb)
         
@@ -330,17 +331,25 @@ class pnlGenerales(wx.Panel):
         fs.Bind(wx.EVT_TEXT, self.EvtComboCtrl)
         
         sb2 = wx.StaticBox(self, -1, u"Origine des données", size = (-1,-1))
-        sbs2 = wx.StaticBoxSizer(sb2,wx.HORIZONTAL)
+        sbs2 = wx.StaticBoxSizer(sb2,wx.VERTICAL)
+        
+        hs1 = wx.BoxSizer(wx.HORIZONTAL)
         self.radio_ES = wx.RadioButton(self, -1,
             label="Port E/S", style=wx.RB_GROUP)
+        self.radio_ES.SetToolTipString(u"Port E/S de l'Arduino")
         self.radio_CSV = wx.RadioButton(self, -1,
             label="Format CSV")
-        sbs2.Add(self.radio_ES, flag = wx.EXPAND|wx.ALL, border = 2)
-        sbs2.Add(self.radio_CSV, flag = wx.EXPAND|wx.ALL, border = 2)
+        self.radio_CSV.SetToolTipString(u"Flux de données au format CSV")
+        self.radio_ES.SetValue(globdef.TYPE_DATA == "ES")
+        self.radio_CSV.SetValue(globdef.TYPE_DATA == "CSV")
+        
+        hs1.Add(self.radio_ES, 1, flag = wx.EXPAND|wx.ALL, border = 2)
+        hs1.Add(self.radio_CSV, 1, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbs2.Add(hs1, flag = wx.EXPAND|wx.ALL, border = 2)
         self.Bind(wx.EVT_RADIOBUTTON, self.onRadioES_CSV, self.radio_ES)
         self.Bind(wx.EVT_RADIOBUTTON, self.onRadioES_CSV, self.radio_CSV)
         
-        
+        hs2 = wx.BoxSizer(wx.HORIZONTAL)
         sbes = wx.StaticBox(self, -1, u"Port E/S", size = (-1,-1))
         sbses = wx.StaticBoxSizer(sbes,wx.VERTICAL)
         self.radio_multi = wx.RadioButton(self, -1,
@@ -358,6 +367,8 @@ class pnlGenerales(wx.Panel):
             label=u"Numérique")
         self.radio_ana.Enable(globdef.SIMPLE_PORT)
         self.radio_num.Enable(globdef.SIMPLE_PORT)
+        self.radio_ana.SetToolTipString(u"Port analogique de l'Arduino")
+        self.radio_num.SetToolTipString(u"Port numérique de l'Arduino")
         
         sbses.Add(self.radio_ana, flag = wx.EXPAND|wx.ALL, border = 2)
         sbses.Add(self.radio_num, flag = wx.EXPAND|wx.ALL, border = 2)
@@ -378,16 +389,23 @@ class pnlGenerales(wx.Panel):
         self.vc = vc2
         sbses.Add(vc2, flag = wx.EXPAND|wx.ALL, border = 5)
         
-        sbs2.Add(sbses, flag = wx.EXPAND|wx.ALL, border = 5)
+        hs2.Add(sbses, 1, flag = wx.EXPAND|wx.ALL, border = 5)
         
         sbcsv = wx.StaticBox(self, -1, u"Format CSV", size = (-1,-1))
         sbscsv = wx.StaticBoxSizer(sbcsv,wx.VERTICAL)
         
         
-        sbs2.Add(sbscsv, flag = wx.EXPAND|wx.ALL, border = 5)
+        hs2.Add(sbscsv, 1, flag = wx.EXPAND|wx.ALL, border = 5)
         
+        sbs2.Add(hs2, flag = wx.EXPAND|wx.ALL, border = 5)
         sbs1.Add(sbs2, flag = wx.EXPAND|wx.ALL, border = 5)
         
+        #
+        #
+        #
+        self.ba = wx.Button(self, -1, u"Téléverser le script élémentaire dans l'Arduino")
+        sbs1.Add(self.ba, flag = wx.EXPAND|wx.ALL, border = 5)
+        self.Bind(wx.EVT_BUTTON, self.OnButtonScript)
         self.SetSizerAndFit(self.ns)
     
  
@@ -396,7 +414,8 @@ class pnlGenerales(wx.Panel):
         self.radio_ana.Enable(self.radio_simple.GetValue())
         self.radio_num.Enable(self.radio_simple.GetValue())
         self.opt["SimplePort"] = self.radio_simple.GetValue()
-        self.Parent.Parent.modif = True
+        self.ba.Enable(True)
+#        self.Parent.Parent.modif = True
         
     
     def onRadioES_CSV(self, event):
@@ -404,7 +423,8 @@ class pnlGenerales(wx.Panel):
             self.opt["TypeData"] = "ES"
         else:
             self.opt["TypeData"] = "CSV"
-        self.Parent.Parent.modif = True
+        self.ba.Enable(True)
+#        self.Parent.Parent.modif = True
         
 #    def on_portAuto(self, event):
 #        self.cbPort.Enable(self.radio_portManu.GetValue())
@@ -418,14 +438,15 @@ class pnlGenerales(wx.Panel):
         else:
             self.opt["TypePort"] = "N"
             self.vc.SetBornes((0, 10))
-        
-        self.Parent.Parent.modif = True
+        self.ba.Enable(True)
+#        self.Parent.Parent.modif = True
         
     def EvtComboBoxB(self, event):
         cb = event.GetEventObject()
         data = cb.GetValue()
         self.opt["Baudrate"] = eval(data)
-        self.Parent.Parent.modif = True
+        self.ba.Enable(True)
+#        self.Parent.Parent.modif = True
         
     def EvtComboBoxP(self, event):
         cb = event.GetEventObject()
@@ -435,17 +456,23 @@ class pnlGenerales(wx.Panel):
         
     def EvtVariable(self, event):
         self.opt["AcquisInterval"] = event.GetVar().v[0]
-        self.Parent.Parent.modif = True
+        self.ba.Enable(True)
+#        self.Parent.Parent.modif = True
 
 
     def EvtVariableP(self, event):
         self.opt["ArduinoPort"] = event.GetVar().v[0]
-        self.Parent.Parent.modif = True
+        self.ba.Enable(True)
+#        self.Parent.Parent.modif = True
         
     def EvtComboCtrl(self, event):
         self.opt["RepArduino"] = event.GetEventObject().GetValue()
-        self.Parent.Parent.modif = True
+        self.ba.Enable(True)
+#        self.Parent.Parent.modif = True
 
+    def OnButtonScript(self, evt):
+        self.Parent.Parent.Parent.DemanderLancerArduino()
+        
 #######################################################################################################
 class pnlAffichage(wx.Panel):
     def __init__(self, parent, optAffichage):

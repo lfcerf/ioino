@@ -36,6 +36,7 @@
 import sys, os
 from glob import glob
 from cx_Freeze import setup, Executable
+from pyArduinoScope import __version__
 
 ## Remove the build folder, a bit slower but ensures that build contains the latest
 import shutil
@@ -58,8 +59,6 @@ build_exe_options = {"packages": ["os"],
                                   'pywin.debugger.dbgcon', 'pywin.dialogs', 'tcl',
                                   'Tkconstants', 'pydoc', 'doctest', 'test', 'sqlite3',
                                   "PyQt4", "PyQt4.QtGui","PyQt4._qt",
-                                  "matplotlib",
-                                  "numpy",
                                   ],
                      "include_files": includefiles,
                      'bin_excludes' : ['libgdk-win32-2.0-0.dll', 'libgobject-2.0-0.dll', 'tcl85.dll',
@@ -85,7 +84,7 @@ cible = Executable(
 
 
 setup(  name = "pyArduinoScope",
-        version = "0.3",
+        version = __version__,
         author = "Cedrick FAURY",
         description = u"pyArduinoScope",
         options = {"build_exe": build_exe_options},

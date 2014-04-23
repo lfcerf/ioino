@@ -34,10 +34,12 @@ class Thread_Reception(threading.Thread):
         self.Terminated = False
         self.Pause = False
         self.ser = ser
+        self.bienTerminated = False
     
     def run(self):
         print "Thread_Reception run !"
         global last_received, last_time
+        last_received = None
         i = 0
         buff = ''
         while not self.Terminated:
@@ -58,11 +60,15 @@ class Thread_Reception(threading.Thread):
                 #last filled line, so you could make the above statement conditional
                 #like so: if lines[-2]: last_received = lines[-2]
                 buff = lines[-1]
+          
         print "Thread_Reception s'est termine proprement"
-    
+        self.bienTerminated = True
+        
     def stop(self):
         print "Arrêt thread Reception..."
         self.Terminated = True
+        while not self.bienTerminated:
+            time.sleep(0.1)
 
 
 
@@ -162,36 +168,39 @@ class SerialData(object):
         #return a float value or try a few times until we get one
         for i in range(40):
             if last_received == None:
-                return None
+                return None, None
         
             line = last_received
             vals = line.replace('\r', '').split('\t')
             if len(vals)>1:
-
                 try:
                     temps = eval(vals[0])/1000.
                     val = asarray([eval(v) for v in vals[1:]])
                 except:
-                    temps = last_time
+                    temps = None
                     val = 0.
    
                 return (temps, val )
             
-        return (last_time, 0.)
+        return (None, 0.)
     
     
     def __del__(self):
         if self.ser:
             self.ser.close()
+            print u"Liaison fermée"
+            self.ser == None
 
     def Pause(self, etat):
+        global last_received
         if hasattr(self, 't'):
             self.t.Pause = etat
+            last_received = None
     
 
     def Terminer(self):
         if hasattr(self, 't'):
-            self.t.Terminated = True
+            self.t.stop()
         self.__del__()
 
 
@@ -205,12 +214,13 @@ class DataGen_Thread(threading.Thread):
         self.parent = parent
         self.datagen = self.parent.datagen
         self._stopevent = threading.Event( )
-        self.temps = 0.
+        self.tempsUC = time.clock()
      
     def run(self):
         print "DataGen run !"
-        self.t0 = time.clock()
+        self.t0 = None #time.clock()
         self.t = 0.
+        self.tempsUC = time.clock()
         while not self._stopevent.isSet():
             self.on_datagen_timer()
 #            self._stopevent.wait(0.001*globdef.DATAGEN_INTERVAL_MS)
@@ -226,7 +236,7 @@ class DataGen_Thread(threading.Thread):
         #
         # Attente ...
         #
-        t_attente = 0.001*globdef.DATAGEN_INTERVAL_MS - (time.clock()-self.temps)
+        t_attente = 0.001*globdef.DATAGEN_INTERVAL_MS - (time.clock()-self.tempsUC)
         if t_attente > 0:
             self._stopevent.wait(t_attente)
             
@@ -241,19 +251,25 @@ class DataGen_Thread(threading.Thread):
         elif globdef.TYPE_DATA == "CSV":
             temps, data = self.datagen.next_csv()
             
-
+        
         
         #
         # Enregistrement des données
         #
-        if temps > 0 and self.temps != temps:
-            self.temps = temps
-            self.t = temps - self.t0
+        
+        if temps > 0 and self.t != temps:
+            if self.t0 == None:
+                self.t0 = temps
+                print "T0 =", temps
+            self.tempsUC = time.clock()
+            self.t = temps
+#            print temps, data
             
-            self.parent.data.append((self.t*1000, data))
-            self.parent.temps.append(self.t*1000)
+            t = (temps - self.t0)*1000
+            self.parent.data.append((t, data))
+            self.parent.temps.append(t)
             try:
-                self.parent.csv.append(str(self.t)+"\t"+"\t".join([str(v) for v in data.tolist()]))
+                self.parent.csv.append(str(t)+"\t"+"\t".join([str(v) for v in data.tolist()]))
             except:
                 pass
 #            self.parent.data.append((self.t, data))
