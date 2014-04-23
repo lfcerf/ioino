@@ -82,9 +82,10 @@ class GraphFrame(wx.Frame):
         
 #        AjoutVariablesEnv()
 
-        self.paused = False
+        self.paused = True
         self.fichier = None
         self.nomfichier = ""
+        self.connexionOK = False
         
         self.create_menu()
         self.create_status_bar()
@@ -105,7 +106,7 @@ class GraphFrame(wx.Frame):
         # On applique les options ...
         self.DefinirOptions(options)
         self.AppliquerOptions() 
-        self.initTimer()
+#        self.initTimer()
         
         
         
@@ -127,10 +128,15 @@ class GraphFrame(wx.Frame):
         else:
             self.datagen = AudioData()
         
-        if not self.datagen.ser:
-            print u"  Connexion échouée !!"
-
-        #
+        
+        
+        if not hasattr(self.datagen, 'ser') or not self.datagen.ser:
+            self.connexionOK = False
+            self.statusbar.SetStatusText(u"Echec de connexion !", 2)
+        else:
+            self.connexionOK = True
+            self.statusbar.SetStatusText(u"Connecté sur "+globdef.COM_PORT, 2)
+        #  
         # Remise à 0 des données et des tracés
         #
         self.initData()
@@ -149,6 +155,7 @@ class GraphFrame(wx.Frame):
                 self.data = [(0., np.zeros(16))]
         elif globdef.TYPE_DATA == "CSV" :
             self.data = [(0., np.zeros(16))]
+            
         self.csv = []
         
         if hasattr(self, "cb_e") and self.cb_e.GetValue():
@@ -174,13 +181,14 @@ class GraphFrame(wx.Frame):
     def initTimer(self):
         """ Initialisation et démarrage du timer
         """
-        print "initTimer", globdef.REFRESH_INTERVAL_MS
+        if not self.connexionOK:
+            self.initSerial()
+            print "recommencer"
+            return
         
-        if hasattr(self, 'redraw_timer'):
-            self.redraw_timer.Stop()
-            
-        if hasattr(self, 'datagen_thread'):
-            self.datagen_thread.stop()
+        print "initTimer", globdef.REFRESH_INTERVAL_MS, "ms"
+        
+        self.StopThreads()
             
         if globdef.SOURCE == "Arduino":
             self.datagen_thread = DataGen_Thread(self)
@@ -195,6 +203,14 @@ class GraphFrame(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)
         
         
+    def StopThreads(self):
+        if hasattr(self, 'redraw_timer'):
+            self.redraw_timer.Stop()
+            
+        if hasattr(self, 'datagen_thread'):
+            self.datagen_thread.stop()
+      
+        
     def create_menu(self):
         self.menubar = wx.MenuBar()
         
@@ -202,7 +218,7 @@ class GraphFrame(wx.Frame):
         m_expt = menu_file.Append(-1, u"&Enregistrer le tracé\tCtrl-S", u"Enregistrer le tracé dans un fichier")
         self.Bind(wx.EVT_MENU, self.on_save_plot, m_expt)
         menu_file.AppendSeparator()
-        m_exit = menu_file.Append(-1, "Quitter\tCtrl-Q", "Exit")
+        m_exit = menu_file.Append(-1, "Quitter\tCtrl-Q", "Quitter pyArduinoScope")
         self.Bind(wx.EVT_MENU, self.on_exit, m_exit)
                 
         menu_tool = wx.Menu()
@@ -271,7 +287,7 @@ class GraphFrame(wx.Frame):
         #
         # Bouton pause
         #
-        self.pause_button = wx.Button(self.panel, -1, "Pause")
+        self.pause_button = wx.Button(self.panel, -1, "Demarrer")
         self.Bind(wx.EVT_BUTTON, self.on_pause_button, self.pause_button)
         self.Bind(wx.EVT_UPDATE_UI, self.on_update_pause_button, self.pause_button)
         
@@ -336,6 +352,7 @@ class GraphFrame(wx.Frame):
     
     def create_status_bar(self):
         self.statusbar = self.CreateStatusBar()
+        self.statusbar.SetFieldsCount(3)
 
     def init_plot(self):
         self.dpi = 100
@@ -368,9 +385,11 @@ class GraphFrame(wx.Frame):
     #########################################################################################################
     def dezipperData(self):
         x, y = zip(*self.data)
-        
-        if type(y[0]) == np.ndarray:
-            y = zip(*y)
+        try:
+            if type(y[0]) == np.ndarray:
+                y = zip(*y)
+        except:
+            print "Erreur :", y
 #        print y
         return x, y
         
@@ -457,6 +476,7 @@ class GraphFrame(wx.Frame):
 #        print len(self.data)
 #        print "x", x[-100:]
 #        print "y", y[0][-100:]
+
         
         self.AjusterVue(x, y)
 
@@ -520,6 +540,7 @@ class GraphFrame(wx.Frame):
 #        globdef.X_RANGE == self.vX.v[0]
             
     def on_pause_button(self, event = None):
+        print "on_pause_button", not self.paused
         self.paused = not self.paused
         
         self.sb.Enable(self.paused and not self.rb1.GetValue())
@@ -527,20 +548,26 @@ class GraphFrame(wx.Frame):
             self.ReglerScrollBar()
         
         if self.paused:
-            self.datagen_thread.stop()
-            self.redraw_timer.Stop()
+            self.StopThreads()
             self.draw_plot()
             if self.fichier != None:
                 self.fichier.close()
+            self.statusbar.SetStatusText(u"", 1)
+            
         else:
             self.initData()
             self.initTimer()
-
+            if not self.connexionOK:
+                self.paused = True
+                self.sb.Enable(self.paused and not self.rb1.GetValue())
+        
+        self.cb_e.Enable(self.paused)
+        self.ds.Enable(self.paused)
         self.datagen.Pause(self.paused)
             
     
     def on_update_pause_button(self, event):
-        label = u"Reprise" if self.paused else u"Pause"
+        label = u"Démarrer" if self.paused else u"Arrêter"
         self.pause_button.SetLabel(label)
     
     def on_cb_grid(self, event):
@@ -567,7 +594,7 @@ class GraphFrame(wx.Frame):
         if val == wx.ID_OK:
             self.DefinirOptions(options)
             self.AppliquerOptions(dlg.modif)
-            self.datagen.Pause(True)
+#            self.datagen.Pause(True)
         else:
             pass
 #            print "You pressed Cancel"
@@ -630,12 +657,12 @@ class GraphFrame(wx.Frame):
                 self.csv = []
     
     def on_exit(self, event):
-        print 'on_exit'
+        print 'Demande de fermeture ...',
         event.Skip()
-        self.redraw_timer.Stop()
-        self.datagen_thread.stop()
+        self.StopThreads()
         self.datagen.Terminer()
         self.options.enregistrer()
+        print 'Fermé !',
         self.Destroy()
     
     
@@ -648,14 +675,14 @@ class GraphFrame(wx.Frame):
                 t = t1-t0
                 moy = np.average(t)
                 msg = str(int(moy))+"ms"
-                self.statusbar.SetStatusText(msg)
+                self.statusbar.SetStatusText(msg, 1)
                 self.temps = []
         except:
             pass
     
     
     def flash_status_message(self, msg, flash_len_ms=1500):
-        self.statusbar.SetStatusText(msg)
+        self.statusbar.SetStatusText(msg, 2)
         self.timeroff = wx.Timer(self)
         self.Bind(
             wx.EVT_TIMER,
@@ -664,7 +691,7 @@ class GraphFrame(wx.Frame):
         self.timeroff.Start(flash_len_ms, oneShot=True)
     
     def on_flash_status_off(self, event):
-        self.statusbar.SetStatusText('')
+        self.statusbar.SetStatusText('', 0)
 
     def DefinirOptions(self, options):
         self.options = options.copie()
@@ -705,25 +732,28 @@ class GraphFrame(wx.Frame):
     def AppliquerOptions(self, modifCode = False):
         """ Procédure mettant en application toutes les options sauvegardées
         """
-        if globdef.TYPE_PORT == "A":
+        if globdef.TYPE_DATA == "ES":
             self.selectA.Enable(not globdef.SIMPLE_PORT, globdef.ARDUINO_PORT)
             self.selectN.Enable(not globdef.SIMPLE_PORT)
         else:
-            self.selectA.Enable(not globdef.SIMPLE_PORT)
-            self.selectN.Enable(not globdef.SIMPLE_PORT, globdef.ARDUINO_PORT)
+            self.selectA.Enable(False)
+            self.selectN.Enable(False)
         
-        if globdef.SIMPLE_PORT:
-            self.axes.set_title('ArduinoScope - port ' + globdef.TYPE_PORT + str(globdef.ARDUINO_PORT), size=12)
+        if globdef.TYPE_DATA == "ES":
+            if globdef.SIMPLE_PORT:
+                self.axes.set_title('ArduinoScope - port ' + globdef.TYPE_PORT + str(globdef.ARDUINO_PORT), size=12)
+            else:
+                self.axes.set_title('ArduinoScope - multiports', size=12)
         else:
-            self.axes.set_title('ArduinoScope', size=12)
+            self.axes.set_title('ArduinoScope - CSV', size=12)
         
         if self.sb.IsEnabled():
             self.ReglerScrollBar()
         
-        if modifCode:
-            if hasattr(self, 'datagen'):
-                self.datagen.Terminer()
-            lancerArduino(self)
+#        if modifCode:
+#            if hasattr(self, 'datagen'):
+#                self.datagen.Terminer()
+#            lancerArduino(self)
         
         for i in range(16):
             self.plot_data[i].set_linestyle(globdef.LINE_STYLE)
@@ -737,7 +767,7 @@ class GraphFrame(wx.Frame):
        
     #########################################################################################################
     def DemanderLancerArduino(self):
-        self.on_pause_button()
+#        self.on_pause_button()
         lancerArduino(self)
 
 class ChannelChoiceBox(wx.Panel):
